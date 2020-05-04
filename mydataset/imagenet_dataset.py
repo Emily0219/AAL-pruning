@@ -10,9 +10,11 @@ from PIL import Image
 
 
 # train_dir = '/public/ImageNet/ILSVRC/Data/CLS-LOC/train/'
+# val_dir = '/public/ImageNet/ILSVRC/Data/CLS-LOC/val/'
 train_dir = '/public/datasets/ILSVRC2012/train/'
 val_dir = '/public/datasets/ILSVRC2012/img_val/'
-# val_dir = '/public/ImageNet/ILSVRC/Data/CLS-LOC/val/'
+info_dir = '/home/syr/'
+
 
 class ImageNetDataset(Dataset):
     r"""
@@ -35,7 +37,7 @@ class ImageNetDataset(Dataset):
                 normalize,
             ])
             self.root_dir = train_dir
-            self.info_list = '/home/syr/test/HZ_pruning/mydataset/train.txt'
+            self.info_list = info_dir + 'AAL-pruning/mydataset/train.txt'
         else:
             self.transform = transforms.Compose([
                 transforms.Resize(256),
@@ -44,7 +46,7 @@ class ImageNetDataset(Dataset):
                 normalize,
             ])
             self.root_dir = val_dir
-            self.info_list = '/home/syr/test/HZ_pruning/mydataset/val.txt'
+            self.info_list = info_dir + 'AAL-pruning/mydataset/val.txt'
 
         self.filenames_labels = pd.read_csv(self.info_list, delimiter=' ', header=None)
 
@@ -64,12 +66,6 @@ class ImageNetDataset(Dataset):
 
         return image, torch.from_numpy(np.array(labels))
 
-
-def pil_loader(path):
-    # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
-    with open(path, 'rb') as f:
-        img = Image.open(f)
-        return img.convert('RGB')
 
 if __name__ == '__main__':
     # usage
