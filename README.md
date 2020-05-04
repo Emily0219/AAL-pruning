@@ -19,13 +19,13 @@ from mydataset.imagenet_dataset import ImageNetDataset
 
 ## Train original model
 ```
-
+python main_resnet_imagenet_org_multigpu.py --model resnet --depth 50 -b 256 -j 16 --gpus 0,1 --epoch 100 
 ```
 
 ## Train a pruned model with AAL
 - Train each model from scratch by default.
 ```
-python prune_resnet_imagenet_multigpu.py --model resnet_bnat --depth 50 -b 256 -j 32 --gpus 0,1 --epoch 100             
+python prune_resnet_imagenet_multigpu.py --model resnet_bnat --depth 50 -b 256 -j 16 --gpus 0,1 --epoch 100             
 ```
 - Generate a pruned model.
     * resnet18/resnet34     ```get_imagenet_small_resnet18_34.py```
