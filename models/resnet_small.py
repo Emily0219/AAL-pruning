@@ -103,10 +103,10 @@ class BasicBlock(nn.Module):
 
         # setting: with index match
         if residual.device == torch.device('cpu'):
-            residual += self.bn_value
+            residual = residual + self.bn_value
             residual.index_add_(1, self.index, out)
         else:
-            residual += self.bn_value.cuda()
+            residual = residual + self.bn_value.cuda()
             residual.index_add_(1, self.index.cuda(), out)
 
         residual = self.relu(residual)
@@ -161,10 +161,10 @@ class Bottleneck(nn.Module):
 
         # setting: with index match
         if residual.device == torch.device('cpu'):
-            residual += self.bn_value
+            residual = residual + self.bn_value
             residual.index_add_(1, self.index, out)
         else:
-            residual += self.bn_value.cuda()
+            residual = residual + self.bn_value.cuda()
             residual.index_add_(1, self.index.cuda(), out)
 
         residual = self.relu(residual)
