@@ -216,7 +216,8 @@ def get_bn_value(big_model, block_flag, pruned_index_per_layer, kept_index_per_l
     big_model.eval()
     bn_flag = "bn3" if block_flag == "conv3" else "bn2"
     key_bn = [x for x in big_model.state_dict().keys() if bn_flag in x]
-    layer_flag_list = [[x[0:6], x[7], x[9:12], x] for x in key_bn if "weight" in x]
+    # layer_flag_list = [[x[0:6], x[7], x[9:12], x] for x in key_bn if "weight" in x]
+    layer_flag_list = [[x.split('.')[0], x.split('.')[1], x.split('.')[2], x] for x in key_bn if "weight" in x]
     # layer_flag_list = [['layer1', "0", "bn3",'layer1.0.bn3.weight']]
     bn_value = {}
 
