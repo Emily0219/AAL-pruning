@@ -32,7 +32,7 @@ parser.add_argument('--save', metavar='SAVE', default='',
 ################################
 ######### model config #########
 ################################
-parser.add_argument('--dataset', metavar='DATASET', default='cifar10',  #10
+parser.add_argument('--dataset', metavar='DATASET', default='cifar10',
                     help='dataset name or folder')
 parser.add_argument('--model', '-a', metavar='MODEL', default='resnet',
                     choices=model_names,

@@ -17,7 +17,7 @@ import copy
 from ast import literal_eval
 from datetime import datetime
 from models.binarized_modules import BinarizeAttention
-# from thop import profile, clever_format
+from thop import profile, clever_format
 from pytorch_tools import print_model_param_flops
 
 
@@ -36,7 +36,7 @@ parser.add_argument('--input_size', type=int, default=None,
                     help='image input size')
 parser.add_argument('--model_config', default='',
                     help='additional architecture configuration')
-parser.add_argument('--depth', type=int, default=20,
+parser.add_argument('--depth', type=int, default=110,
                     help='resnet depth')
 
 parser.add_argument('--resume', default='',

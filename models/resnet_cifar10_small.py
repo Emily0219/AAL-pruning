@@ -305,14 +305,14 @@ def resnet32_small(pretrained=False, **kwargs):
 
 
 def resnet56_small(pretrained=False, **kwargs):
-    model = ResNet_cifar10_small(Bottleneck, depth=56, **kwargs)
+    model = ResNet_cifar10_small(BasicBlock, depth=56, **kwargs)
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
     return model
 
 
 def resnet110_small(pretrained=False, **kwargs):
-    model = ResNet_cifar10_small(Bottleneck, depth=110, **kwargs)
+    model = ResNet_cifar10_small(BasicBlock, depth=110, **kwargs)
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
     return model
