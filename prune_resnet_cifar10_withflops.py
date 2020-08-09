@@ -68,13 +68,9 @@ parser.add_argument('--optimizer', default='SGD', type=str, metavar='OPT',
                     help='optimizer function used')
 parser.add_argument('--lr', '--learning_rate', default=0.01, type=float,  # 0.1
                     metavar='LR', help='initial learning rate')
-# parser.add_argument('--schedule', default=[50, 100, 150, 200, 250],
 parser.add_argument('--schedule', default=[1, 60, 120, 160],
-# parser.add_argument('--schedule', default=[20, 60, 120, 160],
 # parser.add_argument('--schedule', default=[60, 120, 160],
                     help='initial learning rate')
-# parser.add_argument('--gamma', default=0.2, type=float,
-#                     help='Gamma update for SGD')
 # parser.add_argument('--gamma', default=[0.2,0.2,0.2],
 parser.add_argument('--gamma', default=[10, 0.2, 0.2, 0.2],  # res110
                     help='Gamma update for SGD')
@@ -91,13 +87,7 @@ parser.add_argument('-e', '--evaluate', type=str, metavar='FILE',
 parser.add_argument('--norm', type=bool, default=False,
                     help='whether open binary attention')   # 是否让量化感知层参与更新
 parser.add_argument('--pretrain', default='', type=str, metavar='PATH',
-# parser.add_argument('--pretrain', default='resnet50.pth', type=str, metavar='PATH',
-# parser.add_argument('--pretrain',
-                    # default='/home/syr/Workspace/BinaryAttention_Pruning/results/c10_56_float/resnet56_2020-03-07_12-55-04/checkpoint.pth.tar',
-                    # type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
-
-
 
 
 def main():
@@ -121,8 +111,9 @@ def main():
     logging.debug("run arguments: %s", args)
 
     if 'cuda' in args.type:
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
         args.gpus = [int(i) for i in args.gpus.split(',')]
-        torch.cuda.set_device(args.gpus[0])
+        # torch.cuda.set_device(args.gpus[0])
         cudnn.benchmark = True
     else:
         args.gpus = None
@@ -158,6 +149,12 @@ def main():
             args.start_epoch = checkpoint['epoch'] - 1
             best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
+            bnan_state = checkpoint['bnan']
+            for n, p in list(model.named_parameters()):
+                if 'bnan' in n and 'module.' + n in bnan_state:
+                    p.org = bnan_state['module.' + n]
+                elif 'bnan' in n:
+                    p.org = bnan_state[n]
             logging.info("loaded checkpoint '%s' (epoch %s)",
                          checkpoint_file, checkpoint['epoch'])
         else:
@@ -171,7 +168,6 @@ def main():
                 'bn1.bias',
                 'bn1.running_mean',
                 'bn1.running_var', ]
-
             checkpoint = torch.load(args.pretrain, map_location='cpu')
             mystate = model.state_dict()
             for k, v in mystate.items():
@@ -208,6 +204,13 @@ def main():
     criterion = getattr(model, 'criterion', nn.CrossEntropyLoss)()  # 交叉熵
     criterion.type(args.type)
     model.type(args.type)
+
+    if torch.cuda.device_count() > 1:
+        logging.info("Let's use {} GPUs".format(torch.cuda.device_count()))
+        if args.model.startswith('alexnet') or args.model.startswith('vgg'):
+            model.features = torch.nn.DataParallel(model.features)
+        else:
+            model = torch.nn.DataParallel(model)
 
     val_data = get_dataset(args.dataset, 'val', transform['eval'])
     val_loader = torch.utils.data.DataLoader(
@@ -248,8 +251,6 @@ def main():
     rest_params = filter(lambda x: id(x) not in bnan_params_id, model.parameters())
     params = [
         {'params': bnan_params, 'lr': args.lr*1e-2},
-        # {'params': model.layer2.bnan1.parameters(), 'lr': args.lr*1e-2},
-        # {'params': model.layer3.bnan1.parameters(), 'lr': args.lr*1e-2},
         {'params': rest_params}
     ]
 
@@ -278,11 +279,17 @@ def main():
         is_best = val_prec1 > best_prec1
         best_prec1 = max(val_prec1, best_prec1)
 
+        bnan = {}
+        for n, p in list(model.named_parameters()):
+            if hasattr(p, 'org'):
+                bnan[n] = p.org
+
         save_checkpoint({
             'epoch': epoch + 1,
             'model': args.model,
             'config': args.model_config,
             'state_dict': model.state_dict(),
+            'bnan': bnan,
             'best_prec1': best_prec1,
             'regime': regime
         }, is_best, path=save_path)
@@ -307,58 +314,6 @@ def main():
         #results.plot(x='epoch', y=['train_error5', 'val_error5'],
         #             title='Error@5', ylabel='error %')
         results.save()
-
-
-
-    model_config_2 = {'input_size': args.input_size, 'dataset': args.dataset, 'depth': args.depth,
-                    'mode': True}
-
-    pruned_model = models.__dict__['resnet_bnat_pruned']
-    pruned_model = pruned_model(**model_config_2)
-
-    pruned_model.load_state_dict(model.state_dict())
-    for m in pruned_model.modules():
-        if isinstance(m, BinarizeAttention):  # mask
-            m.weight.org = m.weight.data.clone()
-    pruned_model, compress_ratio, cfg, _ = resnet_hard_prune(pruned_model, False, depth=args.depth,
-                                                      dataset=args.dataset)  # 是否打开量化感知层
-
-    # test pruned model FLOPs
-    pruned_model.eval()  # now model has no bnan
-    if args.dataset == 'imagenet':
-        input = torch.rand(1, 3, 224, 224)
-        MAC, params = profile(pruned_model, inputs=(input,))
-        logging.info('MAC: {}, params: {}'.format(MAC, params))
-        MAC, params = clever_format([MAC, params], '%.3f')
-        logging.info('MAC: {}, params: {}'.format(MAC, params))
-        print_model_param_flops(pruned_model, [224, 224])
-    else:
-        input = torch.rand(1, 3, 32, 32)
-        MAC, params = profile(pruned_model, inputs=(input,))
-        logging.info('MAC: {}, params: {}'.format(MAC, params))
-        MAC, params = clever_format([MAC, params], '%.3f')
-        logging.info('MAC: {}, params: {}'.format(MAC, params))
-        print_model_param_flops(pruned_model, [32, 32])
-    logging.info('successfully pruning ratio {} '.format(1 - compress_ratio))
-
-    pruned_model.type(args.type)
-    for p in list(pruned_model.parameters()):
-        if hasattr(p, 'org'):
-            p.org = p.org.type(args.type)
-
-    val_loss, val_prec1, val_prec5 = validate(val_loader, pruned_model, criterion, 0)
-    logging.info('TEST: Validation Loss {val_loss:.4f} \t'
-                 'Validation Prec@1 {val_prec1:.3f} \t'
-                 'Validation Prec@5 {val_prec5:.3f} \n'
-                 .format(val_loss=val_loss,
-                         val_prec1=val_prec1,
-                         val_prec5=val_prec5))
-    save_checkpoint({
-        'model': 'resnet_bnat_pruned',
-        'state_dict': pruned_model.state_dict(),  # 包含了org数据
-        'cfg': cfg,  # prune cfg
-        'prec1': val_prec1,
-    }, False, path=save_path, filename='pruned.pth.tar')
 
 
 def adjust_learning_rate(optimizer, epoch):
@@ -391,15 +346,21 @@ def forward(data_loader, model, criterion, epoch=0, training=True, optimizer=Non
 
         if not training:
             with torch.no_grad():
-                input_var = Variable(inputs.type(args.type), volatile=not training)
-                target_var = Variable(target)
+                input_var = inputs.type(args.type)
+                target_var = target
                 # compute output
-                output = model(input_var)
+                if args.gpus and len(args.gpus) > 1:
+                    output = model.module(input_var)
+                else:
+                    output = model(input_var)
         else:
-            input_var = Variable(inputs.type(args.type), volatile=not training)
-            target_var = Variable(target)
+            input_var = inputs.type(args.type)
+            target_var = target
             # compute output
-            output = model(input_var)
+            if args.gpus and len(args.gpus) > 1:
+                output = model.module(input_var)
+            else:
+                output = model(input_var)
 
         loss = criterion(output, target_var)
         if type(output) is list:
